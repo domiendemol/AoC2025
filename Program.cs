@@ -2,12 +2,12 @@
 using System.Reflection;
 using Spectre.Console;
 
-namespace AoC2024
+namespace AoC2025
 {
     static class Program
     {
         private const string BENCHMARK = "BENCHMARK";
-        private const int DAY = 1;
+        private const int DAY = 2;
         
         public static void Main(string[] args)
         {
@@ -33,7 +33,7 @@ namespace AoC2024
         static (string, string) RunDay(int day, bool test)
         {
             // REFLECTIOOON
-            Type type = Type.GetType($"AoC2024.Day{day}")!;
+            Type type = Type.GetType($"AoC2025.Day{day}")!;
             MethodInfo? method = type.GetMethod("Run");
             object? obj = Activator.CreateInstance(type);
             string testSuffix = test ? "_test" : "";
@@ -74,6 +74,7 @@ namespace AoC2024
                         table.RemoveRow(table.Rows.Count - 1);
                         string color = Convert.ToInt32(stopwatchElapsed.TotalMilliseconds) >= 1000 ? "red" : "green";
                         table.AddRow($"[blue]Day {i}[/]", result.Item1, result.Item2, $"[{color}]{Convert.ToInt32(stopwatchElapsed.TotalMilliseconds)}[/] ms");
+                        table.Columns[3].RightAligned();
                         ctx.Refresh();
                     }
                 });
