@@ -5,8 +5,19 @@ public class Day2
 	public (string, string) Run(List<string> lines)
 	{
 		List<string> ranges = lines[0].Split(',').ToList();
-		long part1 = ranges.Sum(range => GetInvalids(range, true));
-		long part2 = ranges.Sum(range => GetInvalids(range, false));
+		// Original:
+		// long part1 = ranges.Sum(range => GetInvalids(range, true));
+		// long part2 = ranges.Sum(range => GetInvalids(range, false));
+
+		// With multithreading:
+		long part1 = 0;
+		Parallel.ForEach(ranges, (c, state, index) => {
+			Interlocked.Add(ref part1, GetInvalids(c, true));  
+		});
+		long part2 = 0;
+		Parallel.ForEach(ranges, (c, state, index) => {
+			Interlocked.Add(ref part2, GetInvalids(c, false));  
+		});
 		
 		return (part1.ToString(), part2.ToString());
 	}
