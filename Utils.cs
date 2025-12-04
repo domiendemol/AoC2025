@@ -2,7 +2,7 @@ using System.Collections.Concurrent;
 using System.Runtime.Intrinsics.X86;
 using System.Text;
 
-namespace AoC2024;
+namespace AoC2025;
 
 public static class Utils
 {
@@ -134,5 +134,67 @@ public static class Utils
             @this.Add(element);
         }
     }
+    
+    /// <summary>
+    /// Projects each element of a sequence into a new form by incorporating the element's index.
+    /// </summary>
+    /// <typeparam name="T">The type of the elements of the array.</typeparam>
+    /// <param name="array">A sequence of values to invoke the action on.</param>
+    /// <param name="action">An action to apply to each source element; the second parameter of the function represents the index of the source element.</param>
+    // example: foo.ForEach<string>((value, coords) => Console.WriteLine("(" + String.Join(", ", coords) + $")={value}"));
+    public static void ForEach<T>(this Array array, Action<T, int[]> action)
+    {
+        var dimensionSizes = Enumerable.Range(0, array.Rank).Select(i => array.GetLength(i)).ToArray();
+        ArrayForEach(dimensionSizes, action, new int[] { }, array);
+    }
+    private static void ArrayForEach<T>(int[] dimensionSizes, Action<T, int[]> action, int[] externalCoordinates, Array masterArray)
+    {
+        if (dimensionSizes.Length == 1)
+            for (int i = 0; i < dimensionSizes[0]; i++)
+            {
+                var globalCoordinates = externalCoordinates.Concat(new[] { i }).ToArray();
+                var value = (T)masterArray.GetValue(globalCoordinates);
+                action(value, globalCoordinates);
+            }
+        else
+            for (int i = 0; i < dimensionSizes[0]; i++)
+                ArrayForEach(dimensionSizes.Skip(1).ToArray(), action, externalCoordinates.Concat(new[] { i }).ToArray(), masterArray);
+    }
 
+    public static void PopulateArray<T>(this Array array, Func<int[], T> calculateElement)
+    {
+        array.ForEach<T>((element, indexArray) => array.SetValue(calculateElement(indexArray), indexArray));
+    }
+    
+    // TODO option to check diagonally or not
+    public static List<T> GetNeighbourValues<T>( T[,] inputGrid, int[] pos)
+    {
+        List<T> neighbours = new List<T>();
+        for (int i = -1; i <= 1; i++) { 
+            for (int j = -1; j <= 1; j++)
+            {
+                if ((i == 0 && j == 0)) continue; // (i != 0 && j != 0)
+                T value = inputGrid.TryGetValue<T>(pos[0] + i, pos[1] + j, default);
+                if (value == null || value.Equals(default)) continue;
+                neighbours.Add(value);
+            }
+        }
+        return neighbours;
+    }
+    
+    // TODO option to check diagonally or not
+    public static List<int[]> GetNeighbours<T>( T[,] inputGrid, int[] pos)
+    {
+        List<int[]> neighbours = [];
+        for (int i = -1; i <= 1; i++) { 
+            for (int j = -1; j <= 1; j++)
+            {
+                if ((i == 0 && j == 0)) continue; // (i != 0 && j != 0)
+                T value = inputGrid.TryGetValue<T>(pos[0] + i, pos[1] + j, default);
+                if (value == null || value.Equals(default)) continue;
+                neighbours.Add([pos[0] + i, pos[1] + j]);
+            }
+        }
+        return neighbours;
+    }
 }

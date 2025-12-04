@@ -1,4 +1,4 @@
-namespace AoC2024
+namespace AoC2025
 {
     public struct Vector2Long
     {

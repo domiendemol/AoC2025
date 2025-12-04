@@ -24,7 +24,6 @@ public class Day3
 				int index2 = Array.FindIndex(bank, index + 1, w => w == '0' + (char)j);
 				if (index2 != -1)
 				{
-					Console.WriteLine($"{i}{j}");
 					return i * 10 + j;
 				}
 			}
