@@ -167,7 +167,7 @@ public static class Utils
     }
     
     // TODO option to check diagonally or not
-    public static List<T> GetNeighbourValues<T>( T[,] inputGrid, int[] pos)
+    public static List<T> GetNeighbourValues<T>(T[,] inputGrid, int[] pos)
     {
         List<T> neighbours = new List<T>();
         for (int i = -1; i <= 1; i++) { 
