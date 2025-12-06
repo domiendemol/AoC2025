@@ -18,7 +18,7 @@ public class Day2
 		Parallel.ForEach(ranges, (c, state, index) => {
 			Interlocked.Add(ref part2, GetInvalids(c, false));  
 		});
-		
+	
 		return (part1.ToString(), part2.ToString());
 	}
 
@@ -35,7 +35,7 @@ public class Day2
 			for (int j = 2; j <= len; j++)
 			{
 				if (onlyTwo && j > 2) break;
-				if (len % j != 0) continue;
+				if (len % j != 0) continue;	
 				if (CheckInvalidOptimized(nr, j)) 
 				{
 					result += i;
