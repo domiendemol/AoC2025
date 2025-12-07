@@ -183,15 +183,15 @@ public static class Utils
     }
     
     // TODO option to check diagonally or not
-    public static List<int[]> GetNeighbours<T>( T[,] inputGrid, int[] pos)
+    public static List<int[]> GetNeighbours<T>(T[,] inputGrid, int[] pos)
     {
         List<int[]> neighbours = [];
         for (int i = -1; i <= 1; i++) { 
             for (int j = -1; j <= 1; j++)
             {
                 if ((i == 0 && j == 0)) continue; // (i != 0 && j != 0)
-                T value = inputGrid.TryGetValue<T>(pos[0] + i, pos[1] + j, default);
-                if (value == null || value.Equals(default)) continue;
+                T? value = inputGrid.TryGetValue<T>(pos[0] + i, pos[1] + j, default(T));
+                if (value == null || value.Equals(default(T))) continue;
                 neighbours.Add([pos[0] + i, pos[1] + j]);
             }
         }
