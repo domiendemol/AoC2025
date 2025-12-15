@@ -7,7 +7,7 @@ namespace AoC2025
     static class Program
     {
         private const string BENCHMARK = "BENCHMARK";
-        private const int DAY = 11;
+        private const int DAY = 10;
         
         public static void Main(string[] args)
         {

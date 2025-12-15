@@ -91,6 +91,18 @@ public static class Utils
         }
         Console.WriteLine();
     }
+    
+    public static void PrintArray<T>(T[,] grid)
+    {
+        for (int i = 0; i < grid.GetLength(0); i++) {
+            for (int j = 0; j < grid.GetLength(1); j++) {
+                Console.Write(grid[i, j]);
+                Console.Write(" ");
+            }
+            Console.WriteLine();
+        }
+        // Console.WriteLine();
+    }
 
     public static Vector2Int FindIndex<T>(T[,] grid, T obj)
     {
@@ -196,5 +208,24 @@ public static class Utils
             }
         }
         return neighbours;
+    }
+    
+    public static void GenerateCombinationsHelper(int[] current, int index, int min, int max, int count, List<int[]> result)
+    {
+        if (index == count)
+        {
+            // Copy the current combination to avoid modifying the original array
+            int[] combo = new int[count];
+            Array.Copy(current, combo, count);
+            result.Add(combo);
+        }
+        else
+        {
+            for (int i = min; i <= max; i++)
+            {
+                current[index] = i;
+                GenerateCombinationsHelper(current, index + 1, min, max, count, result);
+            }
+        }
     }
 }
