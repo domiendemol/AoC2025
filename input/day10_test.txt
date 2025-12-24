@@ -1,8 +1,34 @@
-# 1. more buttons than joltages
-[.##.] (3) (1,3) (2) (2,3) (0,2) (0,1) {3,5,4,7}
-# 2. buttons == joltages
-[...#.] (0,2,3,4) (2,3) (0,4) (0,1,2) (1,2,3,4) {7,5,12,7,2}
-# 3. 2 less buttons than joltages
-[.###.#] (0,1,2,3,4) (0,3,4) (0,1,2,4,5) (1,2) {10,11,11,5,10,5}
-# from main input
+# 1. more buttons than joltages     -> 10
+#[.##.] (3) (1,3) (2) (2,3) (0,2) (0,1) {3,5,4,7}
+# 2. buttons == joltages            -> 12
+#[...#.] (0,2,3,4) (2,3) (0,4) (0,1,2) (1,2,3,4) {7,5,12,7,2}
+# 3. 2 less buttons than joltages   -> 11
+#[.###.#] (0,1,2,3,4) (0,3,4) (0,1,2,4,5) (1,2) {10,11,11,5,10,5}
+#
+#
+#
+# from main input:
+#
+# BROKEN, 1 missing equation, but rank is 2 lower button count
+# float values here? must make them integer
+# ISSUE: solver reduces matrix too far, must limit it
+# Solution from python: Sum: 247 --- x1 = 9, x2 = 8, x3 = 1, x4 = 12, x5 = 25,x6 = 24, x7 = 2, x8 = 7, x9 = 145, x10 = 2, x11 = 12
+# Update: found a smaller one: 246
 #[#######...] (2,4,5,6,7) (0,1,2,4,5,8,9) (1,3,4,5,6,7,8,9) (0,1,2,3,4,5,6,9) (1,2,4) (0,3,4,5,6,7,8) (7,8) (1,2,3,4,5) (2,3,8) (2,4,6) (0,2,4,5,8) {56,53,220,189,100,73,48,36,192,21}
+#
+# WORKS, by guessing a button not total, answer: 91
+#[##..##.#] (0,3) (0,1,2,3,4,5) (0,5,6) (1,7) (1,2,4,5,6) (1,2,3,7) (1,4) (1,2,3,4,5,6,7) (0,2,4,5,6,7) {39,56,44,23,57,47,43,37}
+#
+# WORKS, by guessing a button not total, answer: 90
+# update: found a smaller one: 78
+#[..#...##.] (3,5,7) (1,3,4,7,8) (0,1,3,4,6,7,8) (4,6) (1,2,3,4,5,7,8) (0,3,5,8) (1,2,7) (1,2,4,8) (1,2,3,4,5,6,8) (0,1,2,3,5,7,8) (1,2,3,4,7,8) {28,78,54,63,56,39,23,66,68}
+#
+# BROKEN!!! 1 missing equation, can't find solution with total row, or any of the single button as iterated value
+# matrix is singular - trying new approach
+# UPDATE: found solution 78
+# Free vars: 5,7,8 ?
+# TODO verify with python script
+#[.#.#.#..] (0,1,2,4,5,6,7) (0,1,6,7) (0,2,3,5,6,7) (0,2) (1,2,3,4,6) (2,4,5) (0,1,3,4,5,6) (0) (0,3,4,5,6,7) {61,39,43,50,61,52,59,29}
+# NEW:
+[...###..] (1,3) (0,4,5,6,7) (5,6) (1,3,4,5) (2,7) (0,4,5,6) (0,1,2,3,4,6,7) (4,6) (2,3) (0,1,2,3) {39,40,31,54,52,55,61,15}
+

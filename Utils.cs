@@ -228,4 +228,35 @@ public static class Utils
             }
         }
     }
+    
+    public static T[,] ResizeArray<T>(T[,] original, int rows, int cols)
+    {
+        var newArray = new T[rows,cols];
+        int minRows = Math.Min(rows, original.GetLength(0));
+        int minCols = Math.Min(cols, original.GetLength(1));
+        for(int i = 0; i < minRows; i++)
+        for(int j = 0; j < minCols; j++)
+            newArray[i, j] = original[i, j];
+        return newArray;
+    }
+    
+    public static T[,] TrimArray<T>(int rowToRemove, T[,] originalArray)
+    {
+        T[,] result = new T[originalArray.GetLength(0) - 1, originalArray.GetLength(1)];
+
+        for (int i = 0, j = 0; i < originalArray.GetLength(0); i++)
+        {
+            if (i == rowToRemove)
+                continue;
+
+            for (int k = 0, u = 0; k < originalArray.GetLength(1); k++)
+            {
+                result[j, u] = originalArray[i, k];
+                u++;
+            }
+            j++;
+        }
+
+        return result;
+    }
 }

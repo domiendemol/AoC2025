@@ -1,3 +1,4 @@
+using System.Security.Cryptography;
 using System.Text.RegularExpressions;
 
 namespace AoC2025;
@@ -5,6 +6,92 @@ namespace AoC2025;
 public class Day10
 {
 	public (string, string) Run(List<string> lines)
+	{
+		// New approach:
+		// - check rank. If it matches buttons: proceed as normal
+		// - if rank = nrbuttons - 1: try solve with a guessed sum presses row
+		// - if not foudn result or rank even lower: try x free vars (with combos): let's try random values
+		//		- keep trying until we have result
+		// 
+		// TODO 
+
+		// Test1(); return ("test", "1");
+		return RunInput(lines);
+	}
+
+	void Test1()
+	{
+		// for problem {28,78,54,63,56,39,23,66,68}: works
+		// double[,] testMatrix =
+		// {
+		// 	{1, 0, 0, 0, 0, 0, 0, 0, 0, 0},
+		// 	{0, 1, 0, 0, 0, 0, 0, 0, 0, 9},
+		// 	{0, 0, 1, 0, 0, 0, 0, 0, 1, 20},
+		// 	{0, 0, 0, 1, 0, 0, 0, 0, -3, -37},
+		// 	{0, 0, 0, 0, 1, 0, 0, 0, 1, 29},
+		// 	{0, 0, 0, 0, 0, 1, 0, 0, 1, 31},
+		// 	{0, 0, 0, 0, 0, 0, 1, 0, -1, 1},
+		// 	{0, 0, 0, 0, 0, 0, 0, 1, 4, 68},
+		// 	{0, 0, 0, 0, 0, 0, 0, 0, 1, 13}
+		// };
+		
+		double[,] testMatrix =
+		{
+			{0, 1, 0, 1, 0, 1, 0, 0, 0, 0, 1, 56},
+			{0, 1, 1, 1, 1, 0, 0, 1, 0, 0, 0, 53},
+			{1, 1, 0, 1, 1, 0, 0, 1, 1, 1, 1, 220},
+			{0, 0, 1, 1, 0, 1, 0, 1, 1, 0, 0, 189},
+			{1, 1, 1, 1, 1, 1, 0, 1, 0, 1, 1, 100},
+			{1, 1, 1, 1, 0, 1, 0, 1, 0, 0, 1, 73},
+			{1, 0, 1, 1, 0, 1, 0, 0, 0, 1, 0, 48},
+			{1, 0, 1, 0, 0, 1, 1, 0, 0, 0, 0, 36},
+			{0, 1, 1, 0, 0, 1, 1, 0, 1, 0, 1, 192},
+			{0, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0, 21},
+			
+			{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 12},			
+			{0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 2},			
+		};
+		
+		/*
+		 * SUCCESS! Sum: 247
+		   x1 = 9
+		   x2 = 8
+		   x3 = 1
+		   x4 = 12
+		   x5 = 25
+		   x6 = 24
+		   x7 = 2
+		   x8 = 7
+		   x9 = 145
+		   x10 = 2
+		   x11 = 12
+		 */
+		
+		Console.WriteLine($"Rank: {CalculateRank(testMatrix)}");
+
+		var solver = new GaussianEliminationSolver(testMatrix);
+
+		// Solve the system of equations.
+		solver.PrintSteps(true);
+		// solver.SolveSystem(false);
+		// double[] solution = solver.SolveSystem();
+
+		testMatrix = solver.Matrix;
+
+		Utils.PrintArray(testMatrix);
+
+		
+		// Print the solution.
+		// Console.WriteLine("Solution:");
+		// for (int i = 0; i < solution.Length; i++)
+		// {
+		// Console.Write($"{solution[i]} ");
+		// }
+		// Console.WriteLine();
+		// part2 = (int)Math.Round(solution.Sum());
+	}
+
+	(string, string) RunInput(List<string> lines)
 	{
 		// parse machines
 		lines = lines.Where(l => !l.StartsWith('#')).ToList();
@@ -17,21 +104,15 @@ public class Day10
 		});
 		
 		int part2 = 0;
-		
-		// Parallel.ForEach(machines, m => {
-			// Interlocked.Add(ref part2, GetMinJoltageButtonClicks(m));
-		// });
-
 		foreach (Machine m in machines)
 		{
 			int result = GetMinJoltageButtonClicksViaEquations(m);
 			Console.WriteLine($"-> {string.Join(',', m.JoltageReqs)}: {result}");
 			part2 += result;
 		}
-		
 		return (part1.ToString(), part2.ToString());
 	}
-
+	
 	Machine CreateMachine(string line)
 	{
 		// example: [.##.] (3) (1,3) (2) (2,3) (0,2) (0,1) {3,5,4,7}
@@ -147,7 +228,6 @@ public class Day10
 	int JoltageHash(short[] joltages)
 	{
 		// string join is too slow
-		// return string.Join("", joltages);
 		int hc = joltages.Length;
 		foreach (int val in joltages)
 		{
@@ -158,79 +238,118 @@ public class Day10
 
 	int GetMinJoltageButtonClicksViaEquations(Machine machine)
 	{
-		int minResult = machine.JoltageReqs.Max(); 
+		int minResult = machine.JoltageReqs.Max();
 		int buttonPressesGuess = machine.JoltageReqs.Max(); 
-
+		Random rnd = new Random();
+		
 		// get equations, as int arrays
 		int rowCount = Math.Max(machine.Buttons.Count, machine.JoltageReqs.Count);
 		List<int[]> equations = GetEquations(machine, rowCount + 1);
+		
+		// get rank
+		double[,] eqMatrix = BuildMatrix(equations);
+		int rank = CalculateRank(eqMatrix);
+		Console.WriteLine($"Rank: {rank}, buttons: {machine.Buttons.Count}, equations: {equations.Count}");
 
-		int missingEqs = rowCount - equations.Count;
-		if (missingEqs > 0)
+		Utils.PrintArray(eqMatrix);
+		
+		// int missingEqs = rowCount - equations.Count;
+		int missingEqs = machine.Buttons.Count - rank;
+
+		if (missingEqs < 0)
+		{
+			Console.WriteLine("AAAAAARRRR PANIC");
+			return -1;
+		}
+		if (missingEqs == 0)
+		{
+			// ALL GOOD 
+			if (TrySolve(eqMatrix, minResult, true, out int result, out List<int> freeVars, out double[,] matrix)) return result;
+		}
+		else if (missingEqs == 1)
 		{
 			Console.WriteLine("Missing equations: " + missingEqs);
-			
+
 			// Add requirement/equation that all buttons must add up to the total
 			// which we will guess, and try different values
-			int[] totalRow = Enumerable.Range(0, rowCount+1).Select(indx => 1).ToArray();
+			int[] totalRow = Enumerable.Range(0, rowCount + 1).Select(indx => 1).ToArray();
 			totalRow[^1] = buttonPressesGuess;
 			equations.Add(totalRow);
-			
-			// For the other missing equations: make a guess for a single button (per missing equation)
-			for (int i = 0; i < missingEqs-1; i++)
-			{
-				int[] newRow = Enumerable.Range(0, rowCount+1).Select(indx => indx == i ? 1 : 0).ToArray();
-				equations.Add(newRow);
-			}
 
-			// get combinations
-			List<int[]> combos = new List<int[]>();
-			Utils.GenerateCombinationsHelper(new int[missingEqs-1], 0, 0, machine.JoltageReqs.Max(), missingEqs-1, combos);
-			
-			while (buttonPressesGuess < machine.JoltageReqs.Sum(j=>j)) // TODO how many is enough???
+			while (buttonPressesGuess <= machine.JoltageReqs.Sum(j => j)) 
 			{
 				// Console.WriteLine(string.Join(',', machine.JoltageReqs) + " -- end guess: " + buttonPressesGuess);
 				// update 'total' equation with new total guess
 				equations[equations.Count - 1 - (missingEqs - 1)][^1] = buttonPressesGuess;
 
-				if (missingEqs == 1)
-				{
-					// we only need to loop over our total button presses guess
-					if (TrySolve(equations, minResult, machine, out int result))
-						return result;
-				}
-				else
-				{
-					// now loop combinations
-					for (int i = 1; i < combos.Count; i++)
-					{
-						for (int j = 0; j < missingEqs-1; j++)
-						{
-							equations[equations.Count-1-j][^1] = combos[i][j];
-							if (TrySolve(equations, minResult, machine, out int result))
-							{
-								// TODO result or buttonPressGuesses?
-								return result;
-							}
-						}
-					}
-				}
+				// we only need to loop over our total button presses guess
+				if (TrySolve(BuildMatrix(equations), minResult, true, out int result, out List<int> freeVars, out double[,] matrix))
+					return result;
 				
 				buttonPressesGuess++;
 			}
 		}
-		else if (missingEqs < 0)
+		
+		//
+		// missingEqs > 1 OR didn't work with total button guess
+		//
+		Console.WriteLine("Missing equations: " + missingEqs);
+	
+		// try solve, purely to get the free vars from it
+		if (TrySolve(eqMatrix, minResult, true, out int resultTemp, out List<int> freeVarsM, out double[,] freeVarMatrix))
+			return resultTemp;
+		
+		//  use the resulting RRE matrix or the original one to continue??
+		//eqMatrix = freeVarMatrix;
+		//  remove full 0 row(s)??
+		//eqMatrix = Utils.TrimArray(7, eqMatrix);
+		
+		Utils.PrintArray(freeVarMatrix);
+		Console.WriteLine("Free vars: " + string.Join(",", freeVarsM));
+		
+		// For the missing equations: make a guess for a single button (per missing equation)
+		eqMatrix = Utils.ResizeArray(eqMatrix, eqMatrix.GetLength(0)+missingEqs, eqMatrix.GetLength(1));
+		for (int i = 0; i < missingEqs; i++)
 		{
-			Console.WriteLine(" ERROR ");
-			if (TrySolve(equations, minResult, machine, out int result)) return result;
-		}
-		else if (missingEqs == 0)
-		{
-			if (TrySolve(equations, minResult, machine, out int result)) return result;
+			int var = i < freeVarsM.Count ? freeVarsM[i] : rnd.Next(0, machine.Buttons.Count);
+			Console.WriteLine($"Free var {i}: {var}");
+			for (int j = 0; j < eqMatrix.GetLength(1); j++)
+			{
+				eqMatrix[eqMatrix.GetLength(0) - 1 - i, j] = var == j ? 1 : 0;
+			}
 		}
 
+		// get combinations
+		List<int[]> combos = new List<int[]>();
+		Utils.GenerateCombinationsHelper(new int[missingEqs], 0, 0, machine.JoltageReqs.Max(), missingEqs, combos); // TODO machines.Joltages.Max
+		
+		// TODO DO WE NEED TO TAKE THE MINIUM OF THE COMBINATION RESULTS??
+		// or is the the first valid result always correct?
+		
+		// while loop needed? can we find the free variables?
+
+		// loop combinations
+		for (int i = 0; i < combos.Count; i++)
+		{
+			for (int j = 0; j < missingEqs; j++)
+			{
+				// equations[equations.Count-1-j][^1] = combos[i][j]; // TODO change matrix
+				eqMatrix[eqMatrix.GetLength(0)-1-j, eqMatrix.GetLength(1)-1] = combos[i][j]; 
+			}
+			
+			// Console.WriteLine($"Solution {string.Join(',', combos[i])}:");
+			if (TrySolve(eqMatrix, minResult, true, out int result, out List<int> freeVars, out double[,] matr))
+			{
+				return result;
+			}
+			// if (combos[i][0] == 2 && combos[i][1] == 12) break;
+			// if (combos[i][1] == 2 && combos[i][0] == 12) break;
+		}
+		
+		
 		return - 1;
 	}
+	
 
 	// Build equations based on buttons upping the joltages
 	// b1 + b2 + b3 + b4 = joltage
@@ -259,18 +378,15 @@ public class Day10
 		return equations;
 	}
 
-	// modified to extrac total of all vars added up
-	bool TrySolve(List<int[]> equations, int minResult, Machine machine, out int result)
+	double[,] BuildMatrix(List<int[]> equations)
 	{
-		result = 0;
-
-		// build matrix with equations and run it
-		int rowCount = Math.Max(machine.Buttons.Count, machine.JoltageReqs.Count);
-
+		int colCount = equations[0].Length;
+		int rowCount = equations.Count;
+		
 		// last equation => a+b+c+d+...n = X (we loop until we find a valid system of equations)
-		double[,] eqMatrix = new double[rowCount, rowCount + 1];
+		double[,] eqMatrix = new double[rowCount, colCount];
 
-		// step 1: main equations of buttons mapping to joltage reqs
+		// main equations of buttons mapping to joltage reqs
 		for (int i = 0; i < equations.Count; i++)
 		{
 			for (int j = 0; j < equations[i].Length; j++)
@@ -279,74 +395,154 @@ public class Day10
 			}
 		}
 
+		return eqMatrix;
+	}
+	
+	// modified to extract total of all vars added up
+	bool TrySolve(double[,] inputMatrix, int minResult, bool reduceFully, out int result, out List<int> freeVars, out double[,] resultMatrix)
+	{
+		result = 0;
 
-		/*
-		 // TODO re-enable this
-		// missing lines
-		// amount: buttons - (joltageReqs + 1)
-		// for each, choose a random button, try all values starting from 0?
-		for (int i = 0; i < buttonVals.Count; i++)
-		{
-			eqMatrix[machine.JoltageReqs.Count + i, i+1] = 1;
-			eqMatrix[machine.JoltageReqs.Count + i, machine.Buttons.Count] = buttonVals[i];
-		}
-		*/
-		/*
-		if (totalBtnPrssGuess > 0)
-		{
-			// last line: all buttons together must add up to the button clicks
-			// we set this value ourselves (starting with minimum), and increment until first valid one found
-			for (int i = 0; i < machine.Buttons.Count; i++)
-			{
-				eqMatrix[eqMatrix.GetLength(0) - 1, i] = 1;
-			}
-			eqMatrix[eqMatrix.GetLength(0) - 1, eqMatrix.GetLength(1) - 1] = totalBtnPrssGuess;
-		}
-		*/
-
+		// build matrix with equations and run it
+		// int rowCount = Math.Max(machine.Buttons.Count, machine.JoltageReqs.Count);
+		int rowCount = inputMatrix.GetLength(0);
+		double[,] eqMatrix = inputMatrix.Clone() as double[,];
+		
 		// Utils.PrintArray(eqMatrix);
-		//Console.WriteLine("--");
+		// Console.WriteLine("--");
 
 		var solver = new GaussianEliminationSolver(eqMatrix);
 
 		// Solve the system of equations.
 		// solver.PrintSteps();
-		double[] solution = solver.SolveSystem();
+		double[] solution = solver.SolveSystem(reduceFully);
+		double[,] outputMatrix = solver.Matrix;
+		resultMatrix = outputMatrix;
 
-		eqMatrix = solver.Matrix;
-
-		//Utils.PrintArray(eqMatrix);
-		/*
+		// Utils.PrintArray(outputMatrix);
+		
 		// Print the solution.
-		Console.WriteLine("Solution:");
-		for (int i = 0; i < solution.Length; i++)
+		// Console.WriteLine($"Solution {equations[outputMatrix.GetLength(0)-1][outputMatrix.GetLength(1)-1]}:");
+		// for (int i = 0; i < solution.Length; i++)
+		// {
+			// Console.Write($"{solution[i]} ");
+		// }
+		// Console.WriteLine();
+
+		freeVars = new List<int>();
+		result = (int) Math.Round(solution.Sum());
+
+		int bottomRows = inputMatrix.GetLength(1) - rowCount - 1;
+
+		for (int i = 0; i < outputMatrix.GetLength(1)-1; i++)
 		{
-			Console.WriteLine($"x{i + 1} = {solution[i]}");
+			// check columns for non-one or zero values
+			for (int j = 0; j < rowCount; j++)
+			{
+				if (outputMatrix[j, i] != 0 && outputMatrix[j, i] != 1 && !freeVars.Contains(i))
+				{
+					// potential free var, but we need to check one more thing:
+					// it could be we have an answer, aka: on its row all values are zero except the pivot (1) and the value (an integer)
+					if (!CheckValue(outputMatrix, i))
+						freeVars.Add(i);
+				}
+			}
 		}
-		Console.WriteLine();
-		*/
-
-
-		result = (int)Math.Round(solution.Sum());
-
-		int bottomRows = Math.Abs(machine.JoltageReqs.Count - machine.Buttons.Count);
-		if (bottomRows == 0) return true; // no 'missing rows', should always get a valid result
-
+		
 		for (int i = 0; i < bottomRows; i++)
 		{
-			int row = eqMatrix.GetLength(0) - 1 - i;
+			int row = outputMatrix.GetLength(0) - 1 - i;
 			// check full row
 			// must either be ALL zeros
 			// OR 1 on pivot (ignore last value / solution of equation)
-			bool allZero = Enumerable.Range(0, eqMatrix.GetLength(1)-1).All(col => Math.Abs(eqMatrix[row, col]) <= 0.00001);
-			bool pivot1 = Math.Abs(eqMatrix[row, row] - 1) <= 0.00001;
-			if (!allZero && !pivot1) return false;
+			bool allZero = Enumerable.Range(0, outputMatrix.GetLength(1)-1).All(col => Math.Abs(outputMatrix[row, col]) <= 0.00001);
+			bool pivot1 = Math.Abs(outputMatrix[row, row] - 1) <= 0.00001;
+			if (!allZero && !pivot1)
+			{
+				// TODO is the allzero row always the free var one????
+				return false;
+			}
 		}
 		
-		// TODO should all solutions be positive now?
-		// test for all examples
+		bool valid =  result >= minResult && solution.All(val => val >= -0.00001);
+		if (valid)
+		{
+			// Print the solution.
+			Console.WriteLine($"Solution: ");
+			for (int i = 0; i < solution.Length; i++)
+			{
+				Console.Write($"{solution[i]} ");
+			}
+			Console.WriteLine();
+		}
 		
-		return result >= minResult && solution.All(val => val >= -0.00001);
+		return valid;
+	}
+
+	// Check if we find an 'identity' row in our matrix
+	// -> where only the pivot is 1 and the value, so we know the value of this variable
+	bool CheckValue(double[,] matrix, int varIndex)
+	{
+		bool foundValueRow = false; // aka identity row?
+		for (int row = 0; row < matrix.GetLength(0) && !foundValueRow; row++)
+		{
+			if (Math.Abs(matrix[row, varIndex] - 1) > 0.00001) continue;  // pivot must be one
+			foundValueRow = true;
+			for (int col = 0; col < matrix.GetLength(1); col++)	
+			{
+				if (col == matrix.GetLength(1) - 1 && matrix[row, col] <= 0) foundValueRow = false; // value must be positive
+				if (col != varIndex && col != matrix.GetLength(1) - 1 && matrix[row, col] != 0) foundValueRow = false;
+			}
+		}
+		return foundValueRow;
+	}
+
+	static int CalculateRank(double[,] matrix)
+	{
+		int rows = matrix.GetLength(0);
+		int cols = matrix.GetLength(1);
+		int rank = 0;
+
+		// Create a copy to avoid modifying the original matrix
+		double[,] mat = (double[,])matrix.Clone();
+        
+		// Small epsilon to handle floating point precision issues
+		double epsilon = 1e-10;
+
+		bool[] rowSelected = new bool[rows];
+
+		for (int j = 0; j < cols; j++)
+		{
+			int i;
+			for (i = 0; i < rows; i++)
+			{
+				if (!rowSelected[i] && Math.Abs(mat[i, j]) > epsilon)
+					break;
+			}
+
+			if (i != rows)
+			{
+				rank++;
+				rowSelected[i] = true;
+                
+				// Pivot element
+				double pivot = mat[i, j];
+
+				for (int p = 0; p < rows; p++)
+				{
+					if (p != i && Math.Abs(mat[p, j]) > epsilon)
+					{
+						double factor = mat[p, j] / pivot;
+						for (int k = j; k < cols; k++)
+						{
+							mat[p, k] -= factor * mat[i, k];
+						}
+					}
+				}
+			}
+		}
+
+		return rank;
 	}
 }
 
@@ -384,18 +580,17 @@ public class GaussianEliminationSolver
 	// Returns:
 	// - An array of doubles representing the solution to the system of equations.
 	// </summary>
-	public double[] SolveSystem()
+	public double[] SolveSystem(bool reduceFully = true)
 	{
 		// Perform Gaussian elimination.
-		for (int pivotRow = 0; pivotRow < rowCount; pivotRow++)
+		for (int pivotRow = 0; pivotRow < columnCount-1 && pivotRow < rowCount; pivotRow++) // rowCount -> columnCount - 1
 		{
 			// Find the pivot element.
 			int pivotColumn = pivotRow;
 			double pivotElement = matrix[pivotRow, pivotColumn];
 
-
 			// check for zero coefficients
-			if (pivotElement == 0)
+			if (Math.Abs(pivotElement) < 0.00001)
 			{
 				// find non-zero coefficient
 				int swapRow = pivotColumn + 1;
@@ -405,11 +600,10 @@ public class GaussianEliminationSolver
 	            
 				if (swapRow < rowCount && (matrix[swapRow, pivotColumn] != 0)) // found a non-zero coefficient?
 				{
-					// Console.WriteLine($"non zero: {pivotColumn}, swapping with {swapRow}");
-						
 					// yes, then swap it with the above
-					double[] tmp = new double[rowCount + 1];
-					for (int i = 0; i < rowCount + 1; i++)
+					// Console.WriteLine($"non zero: {pivotColumn}, swapping row {pivotRow} with {swapRow}");
+					double[] tmp = new double[columnCount];
+					for (int i = 0; i < columnCount; i++)
 					{
 						tmp[i] = matrix[swapRow, i];
 						matrix[swapRow, i] = matrix[pivotColumn, i];
@@ -419,19 +613,22 @@ public class GaussianEliminationSolver
 			}
             
 			pivotElement = matrix[pivotRow, pivotColumn];
-			if (pivotElement == 0) continue;
+			if (pivotColumn >= columnCount) continue;
+			if (pivotRow >= rowCount) continue;
+			if (Math.Abs(pivotElement) < 0.00001) continue;
             
-			// Scale the pivot row.
+			// Scale/normalize the pivot row.
 			for (int j = pivotColumn; j < columnCount; j++)
 			{
 				matrix[pivotRow, j] /= pivotElement;
 			}
 
 			// Eliminate other rows.
-			for (int i = 0; i < rowCount; i++)
+			for (int i = reduceFully ? 0 : pivotRow+1; i < rowCount; i++)
 			{
 				if (i == pivotRow) continue;
 				double factor = matrix[i, pivotColumn];
+				if (i >= columnCount-1 && pivotRow == i-1) continue; // CHANGED 2025-12-18
 				// if (factor == 0) continue;
 
 				for (int j = pivotColumn; j < columnCount; j++)
@@ -442,8 +639,8 @@ public class GaussianEliminationSolver
 		}
 
 		// Back substitution to find the solution.
-		double[] solution = new double[rowCount];
-		solution[rowCount - 1] = matrix[rowCount - 1, columnCount - 1];
+		double[] solution = new double[columnCount-1];
+		solution[columnCount - 2] = matrix[rowCount - 1, columnCount - 1];
 
 		for (int i = rowCount - 2; i >= 0; i--)
 		{
@@ -454,7 +651,7 @@ public class GaussianEliminationSolver
 				sum += matrix[i, j] * solution[j];
 			}
 
-			solution[i] = matrix[i, columnCount - 1] - sum;
+			solution[i] = (double)Math.Round((Decimal) (matrix[i, columnCount - 1] - sum), 3);
 		}
 
 		return solution;
@@ -463,11 +660,11 @@ public class GaussianEliminationSolver
 	// <summary>
 	// Prints the steps of Gaussian elimination in detail.
 	// </summary>
-	public void PrintSteps()
+	public void PrintSteps(bool reduceFully = true)
 	{
 		Console.WriteLine("Gaussian Elimination Steps:");
 
-		for (int pivotRow = 0; pivotRow < rowCount; pivotRow++)
+		for (int pivotRow = 0; pivotRow < columnCount-1; pivotRow++) // CHANGED 2025-12-18 rowCount -> columnCount - 1
 		{
 			Console.WriteLine($"Step {pivotRow + 1}:");
 
@@ -476,7 +673,7 @@ public class GaussianEliminationSolver
 			{
 				for (int j = 0; j < columnCount; j++)
 				{
-					Console.Write($"{matrix[i, j],-10}");
+					Console.Write($"{matrix[i, j],-5}");
 				}
 
 				Console.WriteLine();
@@ -485,17 +682,19 @@ public class GaussianEliminationSolver
 			Console.WriteLine();
 
 			int pivotColumn = pivotRow;
+			if (pivotColumn >= columnCount) continue;
+			if (pivotRow >= rowCount) continue;
 			// Find the pivot element.
 			double pivotElement = matrix[pivotRow, pivotColumn];
             
 
 			// check for zero coefficients
-			if (pivotElement == 0)
+			if (Math.Abs(pivotElement) < 0.00001)
 			{
 				// find non-zero coefficient
 				int swapRow = pivotColumn + 1;
 				for (; swapRow < rowCount; swapRow++)
-					if (matrix[swapRow, pivotColumn] != 0)
+					if (Math.Abs(matrix[swapRow, pivotColumn]) > 0.00001)
 						break;
 	            
 				if (swapRow < rowCount && (matrix[swapRow, pivotColumn] != 0)) // found a non-zero coefficient?
@@ -503,8 +702,8 @@ public class GaussianEliminationSolver
 					Console.WriteLine($"non zero: {pivotColumn}, swapping with {swapRow}");
 						
 					// yes, then swap it with the above
-					double[] tmp = new double[rowCount + 1];
-					for (int i = 0; i < rowCount + 1; i++)
+					double[] tmp = new double[columnCount];
+					for (int i = 0; i < columnCount; i++)
 					{
 						tmp[i] = matrix[swapRow, i];
 						matrix[swapRow, i] = matrix[pivotColumn, i];
@@ -514,7 +713,7 @@ public class GaussianEliminationSolver
 			}
             
 			pivotElement = matrix[pivotRow, pivotColumn];
-			if (pivotElement == 0) continue;
+			if (Math.Abs(pivotElement) < 0.00001) continue;
 
 			// Scale the pivot row.
 			for (int j = pivotColumn; j < columnCount; j++)
@@ -523,9 +722,10 @@ public class GaussianEliminationSolver
 			}
             
 			// Eliminate other rows.
-			for (int i = 0; i < rowCount; i++)
+			for (int i = reduceFully ? 0 : pivotRow + 1; i < rowCount; i++)
 			{
 				if (i == pivotRow) continue;
+				if (i >= columnCount-1 && pivotRow == i-1) continue; // CHANGED 2025-12-18
 				double factor = matrix[i, pivotColumn];
 				//if (matrix[i, i] != 0 && (matrix[i, i] - factor * matrix[pivotRow, i]) == 0) continue;
 
@@ -542,7 +742,7 @@ public class GaussianEliminationSolver
 		{
 			for (int j = 0; j < columnCount; j++)
 			{
-				Console.Write($"{matrix[i, j],-10}");
+				Console.Write($"{matrix[i, j],-5}");
 			}
 
 			Console.WriteLine();
@@ -551,96 +751,8 @@ public class GaussianEliminationSolver
 		Console.WriteLine("Gaussian Elimination Completed.");
 	}
 }
-    
-// TODO REMOVE
-// Gaussian Elimination based on https://www.codeproject.com/tips/388179/linear-equation-solver-gaussian-elimination-csharp
-public static class LinearEquationSolver
-{
-	/// <summary>Computes the solution of a linear equation system.</summary>
-	/// <param name="M">
-	/// The system of linear equations as an augmented matrix[row, col] where (rows == cols + 1).
-	/// It will contain the solution in "row canonical form" if the function returns "true".
-	/// </param>
-	/// <returns>Returns whether the matrix has a unique solution or not.</returns>
-	public static bool Solve(float[,] M)
-	{
-		// input checks
-		int rowCount = M.GetUpperBound(0) + 1;
-		if (M == null || M.Length != rowCount * (rowCount + 1))
-			throw new ArgumentException("The algorithm must be provided with a (n x n+1) matrix.");
-		if (rowCount < 1)
-			throw new ArgumentException("The matrix must at least have one row.");
-
-		// pivoting
-		for (int col = 0; col + 1 < rowCount; col++)
-		{
-			// check for zero coefficients
-			if (M[col, col] == 0)
-			{
-				// find non-zero coefficient
-				int swapRow = col + 1;
-				for (; swapRow < rowCount; swapRow++)
-					if (M[swapRow, col] != 0)
-						break;
-
-				// TODO FIX THIS
-				//if (swapRow >= rowCount) continue;
-				if (swapRow < rowCount && (M[swapRow, col] != 0)) // found a non-zero coefficient?
-				{
-					Console.WriteLine($"non zero: {col}, swapping with {swapRow}");
-						
-					// yes, then swap it with the above
-					float[] tmp = new float[rowCount + 1];
-					for (int i = 0; i < rowCount + 1; i++)
-					{
-						tmp[i] = M[swapRow, i];
-						M[swapRow, i] = M[col, i];
-						M[col, i] = tmp[i];
-					}
-				}
-				//else return false; // no, then the matrix has no unique solution
-			}
-		}
-
-		Utils.PrintArray(M);
-		Console.WriteLine("--");
-			
-		// elimination
-		for (int sourceRow = 0; sourceRow + 1 < rowCount; sourceRow++)
-		{
-			for (int destRow = sourceRow + 1; destRow < rowCount; destRow++)
-			{
-				float df = M[sourceRow, sourceRow];
-				if (df == 0) continue;
-				float sf = M[destRow, sourceRow];
-				if (sf == 0) continue;
-					
-				Console.WriteLine($"eliminating {sourceRow}:{destRow}:{df}:{sf}");
-				for (int i = 0; i < rowCount + 1; i++)
-					M[destRow, i] = M[destRow, i] * df - M[sourceRow, i] * sf;
-			}
-		}
-			
-		Utils.PrintArray(M);
-		Console.WriteLine("--");
-
-		// back-insertion
-		for (int row = rowCount - 1; row >= 0; row--)
-		{
-			float f = M[row,row];
-			if (f == 0) return false;
-
-			for (int i = 0; i < rowCount + 1; i++) M[row, i] /= f;
-			for (int destRow = 0; destRow < row; destRow++)
-			{
-				M[destRow, rowCount] -= M[destRow, row] * M[row, rowCount]; 
-				M[destRow, row] = 0;
-			}
-		}
-		return true;
-	}
-}
 	
+
 class Machine
 {
 	public bool[] LightTargets;
