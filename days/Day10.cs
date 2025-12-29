@@ -1,5 +1,6 @@
 using System.Security.Cryptography;
 using System.Text.RegularExpressions;
+using Spectre.Console;
 
 namespace AoC2025;
 
@@ -7,16 +8,9 @@ public class Day10
 {
 	public (string, string) Run(List<string> lines)
 	{
-		// New approach:
-		// - check rank. If it matches buttons: proceed as normal
-		// - if rank = nrbuttons - 1: try solve with a guessed sum presses row
-		// - if not foudn result or rank even lower: try x free vars (with combos): let's try random values
-		//		- keep trying until we have result
-		// 
-		// TODO 
-
-		// Test1(); return ("test", "1");
-		return RunInput(lines);
+		
+		//Test2(); return ("test", "1");
+		return RunInput(lines, false);
 	}
 
 	void Test1()
@@ -48,8 +42,44 @@ public class Day10
 			{0, 1, 1, 0, 0, 1, 1, 0, 1, 0, 1, 192},
 			{0, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0, 21},
 			
-			{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 12},			
-			{0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 2},			
+			{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 14},			
+			{0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 1},			
+		};
+		
+		
+		Console.WriteLine($"Rank: {CalculateRank(testMatrix)}");
+
+		var solver = new GaussianEliminationSolver(testMatrix);
+
+		// Solve the system of equations.
+		solver.PrintSteps(true);
+		// solver.SolveSystem(false);
+		double[] solution = solver.SolveSystem();
+
+		testMatrix = solver.Matrix;
+
+		Utils.PrintArray(testMatrix);
+
+		
+		// Print the solution.
+		Console.WriteLine("Solution:");
+		 for (int i = 0; i < solution.Length; i++)
+		 {
+		 Console.Write($"{solution[i]} ");
+		 }
+		 Console.WriteLine();
+		// part2 = (int)Math.Round(solution.Sum());
+	}
+
+	void Test2()
+	{
+		double[,] testMatrix =
+		{
+			{1, 0, 1, 0, 1, 0, 0, 182},
+			{1, 0, 0, 1, 1, 1, 0, 199},
+			{0, 1, 1, 0, 1, 1, 1, 43},
+			{0, 0, 0, 1, 0, 0, 1, 7},
+			{0, 0, 1, 0, 0, 0, 0, 1},		
 		};
 		
 		/*
@@ -74,7 +104,7 @@ public class Day10
 		// Solve the system of equations.
 		solver.PrintSteps(true);
 		// solver.SolveSystem(false);
-		// double[] solution = solver.SolveSystem();
+		double[] solution = solver.SolveSystem();
 
 		testMatrix = solver.Matrix;
 
@@ -82,20 +112,21 @@ public class Day10
 
 		
 		// Print the solution.
-		// Console.WriteLine("Solution:");
-		// for (int i = 0; i < solution.Length; i++)
-		// {
-		// Console.Write($"{solution[i]} ");
-		// }
-		// Console.WriteLine();
+		Console.WriteLine("Solution:");
+		for (int i = 0; i < solution.Length; i++)
+		{
+			Console.Write($"{solution[i]} ");
+		}
+		Console.WriteLine();
 		// part2 = (int)Math.Round(solution.Sum());
 	}
 
-	(string, string) RunInput(List<string> lines)
+	
+	(string, string) RunInput(List<string> lines, bool multiThreading)
 	{
 		// parse machines
 		lines = lines.Where(l => !l.StartsWith('#')).ToList();
-		List<Machine> machines = lines.Select(CreateMachine).ToList();
+		List<Machine> machines = lines.Select((line, index) => CreateMachine(line, index)).ToList();
 
 		int part1 = 0;
 		ParallelOptions options = new ParallelOptions { MaxDegreeOfParallelism = 8 };
@@ -104,16 +135,32 @@ public class Day10
 		});
 		
 		int part2 = 0;
-		foreach (Machine m in machines)
-		{
-			int result = GetMinJoltageButtonClicksViaEquations(m);
-			Console.WriteLine($"-> {string.Join(',', m.JoltageReqs)}: {result}");
-			part2 += result;
+		if (multiThreading) {
+			Parallel.ForEach(machines, (m, state) => {
+				int result = GetMinJoltageButtonClicksViaEquations(m);
+				m.Result = result;
+				Console.WriteLine($"-> {string.Join(',', m.JoltageReqs)}: {result}");
+				Interlocked.Add(ref part2, result); 
+			});
 		}
+		else {
+			foreach (Machine m in machines) {
+				int result = GetMinJoltageButtonClicksViaEquations(m);
+				m.Result = result;
+				Console.WriteLine($"-> {string.Join(',', m.JoltageReqs)}: {result}");
+				part2 += result;
+			}
+		}
+
+		// Print results
+		foreach (Machine m in machines) {
+			Console.WriteLine($"{m.Nr}: {m.Result}");
+		}
+
 		return (part1.ToString(), part2.ToString());
 	}
 	
-	Machine CreateMachine(string line)
+	Machine CreateMachine(string line, int index)
 	{
 		// example: [.##.] (3) (1,3) (2) (2,3) (0,2) (0,1) {3,5,4,7}
 		Match m1 = Regex.Match(line, @"\[([\.#]+)\]");
@@ -124,7 +171,7 @@ public class Day10
 		List<List<short>> buttons = m2.Select(m => m.Groups[1].Value.Split(',').Select(short.Parse).ToList()).ToList();
 		List<short> joltageReqs = m3.Groups[1].Value.Split(',').Select(short.Parse).ToList();
 
-		return new Machine(lightTargets, buttons, joltageReqs);
+		return new Machine(index+1, lightTargets, buttons, joltageReqs);
 	}
 
 	int GetMinLightButtonClicks(Machine machine)
@@ -251,7 +298,7 @@ public class Day10
 		int rank = CalculateRank(eqMatrix);
 		Console.WriteLine($"Rank: {rank}, buttons: {machine.Buttons.Count}, equations: {equations.Count}");
 
-		Utils.PrintArray(eqMatrix);
+		// Utils.PrintArray(eqMatrix);
 		
 		// int missingEqs = rowCount - equations.Count;
 		int missingEqs = machine.Buttons.Count - rank;
@@ -306,48 +353,51 @@ public class Day10
 		
 		Utils.PrintArray(freeVarMatrix);
 		Console.WriteLine("Free vars: " + string.Join(",", freeVarsM));
+
+		// freeVarsM[1] = 4;
 		
 		// For the missing equations: make a guess for a single button (per missing equation)
 		eqMatrix = Utils.ResizeArray(eqMatrix, eqMatrix.GetLength(0)+missingEqs, eqMatrix.GetLength(1));
-		for (int i = 0; i < missingEqs; i++)
-		{
-			int var = i < freeVarsM.Count ? freeVarsM[i] : rnd.Next(0, machine.Buttons.Count);
-			Console.WriteLine($"Free var {i}: {var}");
-			for (int j = 0; j < eqMatrix.GetLength(1); j++)
-			{
-				eqMatrix[eqMatrix.GetLength(0) - 1 - i, j] = var == j ? 1 : 0;
-			}
-		}
-
-		// get combinations
-		List<int[]> combos = new List<int[]>();
-		Utils.GenerateCombinationsHelper(new int[missingEqs], 0, 0, machine.JoltageReqs.Max(), missingEqs, combos); // TODO machines.Joltages.Max
 		
-		// TODO DO WE NEED TO TAKE THE MINIUM OF THE COMBINATION RESULTS??
-		// or is the the first valid result always correct?
-		
-		// while loop needed? can we find the free variables?
-
-		// loop combinations
-		for (int i = 0; i < combos.Count; i++)
+		int min = int.MaxValue;
+		//for (int me = 0; me < missingEqs; me++)
 		{
-			for (int j = 0; j < missingEqs; j++)
+			for (int i = 0; i < missingEqs; i++)
 			{
-				// equations[equations.Count-1-j][^1] = combos[i][j]; // TODO change matrix
-				eqMatrix[eqMatrix.GetLength(0)-1-j, eqMatrix.GetLength(1)-1] = combos[i][j]; 
+				int var = i < freeVarsM.Count ? freeVarsM[i] : rnd.Next(0, missingEqs); // me
+				Console.WriteLine($"Free var {i}: {var}");
+				for (int j = 0; j < eqMatrix.GetLength(1); j++)
+				{
+					eqMatrix[eqMatrix.GetLength(0) - 1 - i, j] = var == j ? 1 : 0;
+				}
 			}
+
+			// get combinations
+			List<int[]> combos = new List<int[]>();
+			Utils.GenerateCombinationsHelper(new int[missingEqs], 0, 0, machine.JoltageReqs.Max(), missingEqs, combos); // TODO machines.Joltages.Max
+		
+			// TODO DO WE NEED TO TAKE THE MINIUM OF THE COMBINATION RESULTS??
+			// while loop needed? can we find the free variables?
+		
+			combos = combos.OrderBy(c => c.Sum()).ToList();
+		
+			// loop combinations
+			for (int i = 0; i < combos.Count; i++)
+			{
+				for (int j = 0; j < missingEqs; j++)
+				{
+					eqMatrix[eqMatrix.GetLength(0)-1-j, eqMatrix.GetLength(1)-1] = combos[i][j]; 
+				}
 			
-			// Console.WriteLine($"Solution {string.Join(',', combos[i])}:");
-			if (TrySolve(eqMatrix, minResult, true, out int result, out List<int> freeVars, out double[,] matr))
-			{
-				return result;
+				// Console.WriteLine($"Solution {string.Join(',', combos[i])}:");
+				if (TrySolve(eqMatrix, minResult, true, out int result, out List<int> freeVars, out double[,] matr))
+				{
+					if (result < min) min = result;
+				}
 			}
-			// if (combos[i][0] == 2 && combos[i][1] == 12) break;
-			// if (combos[i][1] == 2 && combos[i][0] == 12) break;
 		}
 		
-		
-		return - 1;
+		return min < int.MaxValue ? min : -1;
 	}
 	
 
@@ -439,7 +489,9 @@ public class Day10
 			// check columns for non-one or zero values
 			for (int j = 0; j < rowCount; j++)
 			{
-				if (outputMatrix[j, i] != 0 && outputMatrix[j, i] != 1 && !freeVars.Contains(i))
+				if (i == j && outputMatrix[j, i] == 0 && !freeVars.Contains(i))
+					freeVars.Add(i);
+				else if (outputMatrix[j, i] != 0 && outputMatrix[j, i] != 1 && !freeVars.Contains(i)) 
 				{
 					// potential free var, but we need to check one more thing:
 					// it could be we have an answer, aka: on its row all values are zero except the pivot (1) and the value (an integer)
@@ -464,16 +516,31 @@ public class Day10
 			}
 		}
 		
-		bool valid =  result >= minResult && solution.All(val => val >= -0.00001);
+		bool valid =  result >= minResult && solution.All(val => val >= -0.00001 && Double.IsInteger(Math.Round(val, 3)));
 		if (valid)
 		{
 			// Print the solution.
-			Console.WriteLine($"Solution: ");
+			
+			Console.WriteLine($"{solution.Sum()} - Solution: ");
 			for (int i = 0; i < solution.Length; i++)
 			{
 				Console.Write($"{solution[i]} ");
 			}
 			Console.WriteLine();
+			
+			
+			// TODO REMOVE ??
+			// Validate
+			for (int i = 0; i < inputMatrix.GetLength(0); i++)
+			{
+				double rowSum = 0;
+				for (int j = 0; j < inputMatrix.GetLength(1)-1; j++)
+				{
+					if (Math.Abs(inputMatrix[i, j] - 1) < 0.0001f) rowSum += solution[j];
+				}
+				if (Math.Round(rowSum, 2) != (double) inputMatrix[i, inputMatrix.GetLength(1)-1])
+					return false;
+			}
 		}
 		
 		return valid;
@@ -640,12 +707,17 @@ public class GaussianEliminationSolver
 
 		// Back substitution to find the solution.
 		double[] solution = new double[columnCount-1];
-		solution[columnCount - 2] = matrix[rowCount - 1, columnCount - 1];
+		// last solution value is bottom right matrix val
+		// if (columnCount > rowCount + 1)
+			// solution[^1] = 0;
+		// else
+			// solution[^1] = matrix[rowCount - 1, columnCount - 1];
+		int lastVarRow = Math.Min(rowCount - 1, solution.Length - 1);
+		solution[lastVarRow] = matrix[rowCount - 1, columnCount - 1];
 
 		for (int i = rowCount - 2; i >= 0; i--)
 		{
 			double sum = 0;
-
 			for (int j = i + 1; j < columnCount - 1; j++)
 			{
 				sum += matrix[i, j] * solution[j];
@@ -755,12 +827,15 @@ public class GaussianEliminationSolver
 
 class Machine
 {
+	public int Nr;
+	public int Result;
 	public bool[] LightTargets;
 	public List<List<short>> Buttons;
 	public List<short> JoltageReqs;
 
-	public Machine(bool[] lightTargets, List<List<short>> buttons, List<short> joltageReqs)
+	public Machine(int nr, bool[] lightTargets, List<List<short>> buttons, List<short> joltageReqs)
 	{
+		Nr = nr;
 		LightTargets = lightTargets;
 		Buttons = buttons; //OrderByDescending(b => b.Count).ToList();
 		JoltageReqs = joltageReqs;
