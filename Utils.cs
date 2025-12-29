@@ -229,6 +229,32 @@ public static class Utils
         }
     }
     
+    public static IList<IList<int>> DoPermute(int[] nums, int start, int end, IList<IList<int>> list)
+    {
+        if (start == end)
+        {
+            // We have one of our possible n! solutions,
+            // add it to the list.
+            list.Add(new List<int>(nums));
+        }
+        else
+        {
+            for (var i = start; i <= end; i++)
+            {
+                Swap(ref nums[start], ref nums[i]);
+                DoPermute(nums, start + 1, end, list);
+                Swap(ref nums[start], ref nums[i]); // reset for next pass
+            }
+        }
+
+        return list;
+    }
+    
+    static void Swap(ref int a, ref int b)
+    {
+        (a, b) = (b, a);
+    }
+    
     public static T[,] ResizeArray<T>(T[,] original, int rows, int cols)
     {
         var newArray = new T[rows,cols];
