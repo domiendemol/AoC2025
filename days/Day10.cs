@@ -1,3 +1,5 @@
+using System.Reflection.Metadata.Ecma335;
+using System.Security.Cryptography;
 using System.Text.RegularExpressions;
 
 namespace AoC2025;
@@ -6,10 +8,10 @@ public class Day10
 {
 	public (string, string) Run(List<string> lines)
 	{
-		return RunInput(lines, true);
+		return RunInput(lines, true, false);
 	}
 	
-	(string, string) RunInput(List<string> lines, bool multiThreading)
+	(string, string) RunInput(List<string> lines, bool multiThreading, bool printResults)
 	{
 		// parse machines
 		lines = lines.Where(l => !l.StartsWith('#')).ToList();
@@ -23,7 +25,7 @@ public class Day10
 		
 		int part2 = 0;
 		if (multiThreading) {
-			Parallel.ForEach(machines, (m, state) => {
+			Parallel.ForEach(machines, m => {
 				int result = GetMinJoltageButtonClicksViaEquations(m);
 				m.Result = result;
 				Interlocked.Add(ref part2, result); 
@@ -37,10 +39,12 @@ public class Day10
 			}
 		}
 
-		// Print results
-		//foreach (Machine m in machines) {
-		//	Console.WriteLine($"{m.Nr}: {m.Result}");
-		//}
+		if (printResults) {
+			foreach (Machine m in machines) {
+				Console.WriteLine($"{m.Nr}: {m.Result}");
+			}
+		}
+
 		return (part1.ToString(), part2.ToString());
 	}
 	
@@ -158,7 +162,7 @@ public class Day10
 
 	int JoltageHash(short[] joltages)
 	{
-		// string join is too slow
+		// string join was too slow
 		int hc = joltages.Length;
 		foreach (int val in joltages)
 		{
@@ -195,13 +199,13 @@ public class Day10
 		if (missingEqs == 0)
 		{
 			// ALL GOOD 
-			if (TrySolve(eqMatrix, minResult, true, out int result, out List<int> freeVars, out double[,] matrix)) return result;
+			if (TrySolve(eqMatrix, minResult, true, out int result)) return result;
 		}
 		else if (missingEqs == 1)
 		{
 			// Add requirement/equation that all buttons must add up to the total
 			// which we will guess, and try different values
-			int[] totalRow = Enumerable.Range(0, rowCount + 1).Select(indx => 1).ToArray();
+			int[] totalRow = Enumerable.Range(0, rowCount + 1).Select(_ => 1).ToArray();
 			totalRow[^1] = buttonPressesGuess;
 			equations.Add(totalRow);
 
@@ -212,7 +216,7 @@ public class Day10
 				equations[equations.Count - 1 - (missingEqs - 1)][^1] = buttonPressesGuess;
 
 				// we only need to loop over our total button presses guess
-				if (TrySolve(BuildMatrix(equations), minResult, true, out int result, out List<int> freeVars, out double[,] matrix))
+				if (TrySolve(BuildMatrix(equations), minResult, true, out int result))
 					return result;
 				
 				buttonPressesGuess++;
@@ -224,7 +228,9 @@ public class Day10
 		//
 	
 		// try solve, purely to get the free vars from it
-		TrySolve(eqMatrix, minResult, true, out int resultTemp, out List<int> freeVarsM, out double[,] freeVarMatrix);
+		var freeVarsM = GetFreeVars(eqMatrix, true);
+		
+		List<int> buttonMaxes = Enumerable.Range(0, machine.Buttons.Count).Select(b => equations.Min(e => e[b] == 1 ? e[^1] : minResult)).ToList();
 		
 		// Utils.PrintArray(freeVarMatrix);
 		// Console.WriteLine("Free vars: " + string.Join(",", freeVarsM));
@@ -238,41 +244,54 @@ public class Day10
 		
 		// get free far value combinations
 		List<int[]> combos = new List<int[]>();
-		Utils.GenerateCombinationsHelper(new int[missingEqs], 0, 0, machine.JoltageReqs.Max(), missingEqs, combos);
+		// the 4/5 reduction is an optimization by guessing/trying. The range could be calculated per machine, but is more complicated
+		Utils.GenerateCombinationsHelper(new int[missingEqs], 0, 0, machine.JoltageReqs.Max() * 4/5, missingEqs, combos);
 		
 		int min = int.MaxValue;
-		while (min == int.MaxValue)
+		while (min == int.MaxValue && freeVarComIndex < freeVarCombos.Count)
 		{
 			IList<int> freeVarCombo = freeVarCombos[freeVarComIndex++];
+			int[] freeVarMaxes = new int[missingEqs];
 			
 			for (int i = 0; i < missingEqs; i++)
 			{
-				int var = i < freeVarCombo.Count ? freeVarCombo[i] : rnd.Next(0, missingEqs); // me
-				for (int j = 0; j < eqMatrix.GetLength(1); j++)
-				{
+				int var = i < freeVarCombo.Count ? freeVarCombo[i] : NextRandom(rnd, machine.Buttons.Count, freeVarCombo); 
+				freeVarMaxes[i] = buttonMaxes[var];
+				for (int j = 0; j < eqMatrix.GetLength(1); j++) {
 					eqMatrix[eqMatrix.GetLength(0) - 1 - i, j] = var == j ? 1 : 0;
 				}
 			}
 			
-			// loop combinations
+			// loop value combinations
 			for (int i = 0; i < combos.Count; i++)
 			{
-				for (int j = 0; j < missingEqs; j++)
-				{
-					eqMatrix[eqMatrix.GetLength(0)-1-j, eqMatrix.GetLength(1)-1] = combos[i][j]; 
+				bool skip = false;
+				// update matrix with new freeVar values from combo
+				for (int j = 0; j < missingEqs; j++) {
+					eqMatrix[eqMatrix.GetLength(0)-1-j, eqMatrix.GetLength(1)-1] = combos[i][j];
+					if (combos[i][j] > freeVarMaxes[j]) skip = true; // stop if we are over the max button amount
 				}
-			
+				if (skip) continue;
+				
 				// Console.WriteLine($"Solution {string.Join(',', combos[i])}:");
-				if (TrySolve(eqMatrix, minResult, true, out int result, out List<int> freeVars, out double[,] _))
-				{
+				if (TrySolve(eqMatrix, minResult, true, out int result)) {
 					if (result < min) min = result;
 				}
 			}
 		}
 		
-		return min < int.MaxValue ? min : -1;
+		return min;
 	}
-	
+
+	int NextRandom(Random rnd, int max, IList<int> exclude)
+	{
+		int next = exclude[0];
+		while (exclude.Contains(next))
+		{
+			next = rnd.Next(0, max);
+		}
+		return next;
+	}
 
 	// Build equations based on buttons upping the joltages
 	// b1 + b2 + b3 + b4 = joltage
@@ -321,30 +340,66 @@ public class Day10
 		return eqMatrix;
 	}
 	
-	// modified to extract total of all vars added up
-	bool TrySolve(double[,] inputMatrix, int minResult, bool reduceFully, out int result, out List<int> freeVars, out double[,] resultMatrix)
+	List<int> GetFreeVars(double[,] inputMatrix, bool reduceFully)
 	{
-		result = 0;
-
 		// build matrix with equations and run it
 		// int rowCount = Math.Max(machine.Buttons.Count, machine.JoltageReqs.Count);
 		int rowCount = inputMatrix.GetLength(0);
 		double[,] eqMatrix = inputMatrix.Clone() as double[,];
-		
+
 		// Utils.PrintArray(eqMatrix);
 		// Console.WriteLine("--");
 
 		var solver = new GaussianEliminationSolver(eqMatrix);
 
 		// Solve the system of equations.
-		// solver.PrintSteps();
+		solver.SolveSystem(reduceFully);
+		double[,] outputMatrix = solver.Matrix;
+
+		List<int> freeVars = new List<int>();
+		
+		for (int i = 0; i < outputMatrix.GetLength(1) - 1; i++)
+		{
+			// check columns for non-one or zero values
+			int ones = 0;
+			for (int j = 0; j < rowCount; j++)
+			{
+				if (i == j && outputMatrix[j, i] == 0 && !freeVars.Contains(i))
+					freeVars.Add(i);
+				else if (outputMatrix[j, i] != 0 && outputMatrix[j, i] != 1 && !freeVars.Contains(i))
+				{
+					// potential free var, but we need to check one more thing:
+					// it could be we have an answer, aka: on its row all values are zero except the pivot (1) and the value (an integer)
+					if (!CheckValue(outputMatrix, i))
+						freeVars.Add(i);
+				}
+				else if (outputMatrix[j, i] == 1)
+					ones++;
+			}
+			if (ones > 1 &&  !freeVars.Contains(i))
+				freeVars.Add(i); // multiple ones per column, free var
+		}
+		
+		return freeVars;
+	}
+
+	// modified to extract total of all vars added up
+	bool TrySolve(double[,] inputMatrix, int minResult, bool reduceFully, out int result)
+	{
+		result = 0;
+
+		// build matrix with equations and run it
+		int rowCount = inputMatrix.GetLength(0);
+		double[,] eqMatrix = (inputMatrix.Clone() as double[,])!;
+		
+		var solver = new GaussianEliminationSolver(eqMatrix);
+
+		// Solve the system of equations.
 		double[] solution = solver.SolveSystem(reduceFully);
 		double[,] outputMatrix = solver.Matrix;
-		resultMatrix = outputMatrix;
 
 		// Utils.PrintArray(outputMatrix);
 		
-		// Print the solution.
 		// Console.WriteLine($"Solution {equations[outputMatrix.GetLength(0)-1][outputMatrix.GetLength(1)-1]}:");
 		// for (int i = 0; i < solution.Length; i++)
 		// {
@@ -352,28 +407,9 @@ public class Day10
 		// }
 		// Console.WriteLine();
 
-		freeVars = new List<int>();
 		result = (int) Math.Round(solution.Sum());
 
 		int bottomRows = inputMatrix.GetLength(1) - rowCount - 1;
-
-		for (int i = 0; i < outputMatrix.GetLength(1)-1; i++)
-		{
-			// check columns for non-one or zero values
-			for (int j = 0; j < rowCount; j++)
-			{
-				if (i == j && outputMatrix[j, i] == 0 && !freeVars.Contains(i))
-					freeVars.Add(i);
-				else if (outputMatrix[j, i] != 0 && outputMatrix[j, i] != 1 && !freeVars.Contains(i)) 
-				{
-					// potential free var, but we need to check one more thing:
-					// it could be we have an answer, aka: on its row all values are zero except the pivot (1) and the value (an integer)
-					if (!CheckValue(outputMatrix, i))
-						freeVars.Add(i);
-				}
-			}
-		}
-		
 		for (int i = 0; i < bottomRows; i++)
 		{
 			int row = outputMatrix.GetLength(0) - 1 - i;
@@ -384,19 +420,16 @@ public class Day10
 			bool pivot1 = Math.Abs(outputMatrix[row, row] - 1) <= 0.00001;
 			if (!allZero && !pivot1)
 			{
-				// TODO is the allzero row always the free var one????
 				return false;
 			}
 		}
 		
-		bool valid =  result >= minResult && solution.All(val => val >= -0.00001 && Double.IsInteger(Math.Round(val, 3)));
+		bool valid = result >= minResult && solution.All(val => val >= -0.00001 && Double.IsInteger(Math.Round(val, 3)));
 		if (valid)
 		{
 			/*
-			// Print the solution.
 			Console.WriteLine($"{solution.Sum()} - Solution: ");
-			for (int i = 0; i < solution.Length; i++)
-			{
+			for (int i = 0; i < solution.Length; i++) {
 				Console.Write($"{solution[i]} ");
 			}
 			Console.WriteLine();
@@ -568,10 +601,6 @@ public class GaussianEliminationSolver
 		// Back substitution to find the solution.
 		double[] solution = new double[columnCount-1];
 		// last solution value is bottom right matrix val
-		// if (columnCount > rowCount + 1)
-			// solution[^1] = 0;
-		// else
-			// solution[^1] = matrix[rowCount - 1, columnCount - 1];
 		int lastVarRow = Math.Min(rowCount - 1, solution.Length - 1);
 		solution[lastVarRow] = matrix[rowCount - 1, columnCount - 1];
 
